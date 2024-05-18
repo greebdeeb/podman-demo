@@ -1,0 +1,11 @@
+FROM ubuntu
+
+MAINTAINER joshua helms <jghelms88@gmail.com>
+
+RUN apt-get update
+RUN apt-get install -y python3
+
+WORKDIR /app
+COPY ./udp-receiver.py /app
+
+CMD ["python3", "-u", "udp-receiver.py"]

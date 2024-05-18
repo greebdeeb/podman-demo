@@ -1,0 +1,7 @@
+FROM ubuntu
+
+MAINTAINER joshua helms <jghelms88@gmail.com>
+
+RUN apt-get update
+
+CMD ["echo", "Hello World!"]

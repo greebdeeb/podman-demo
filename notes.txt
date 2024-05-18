@@ -1,0 +1,97 @@
+note:
+
+Podman on windows has thsis arch:
+windows host -> WSL -> podman machine (linux vm) -> container
+
+The windows host uses WSL to run a linux based virtual machine, which is referred to as a "podman machine"
+This linux based podman machine hosts the podman containers, acting as a nested virtualization layer.
+
+When using the "podman run --net=host <image name>" command, the container will share network stack with the podman machine
+
+
+Questions:
+what about if we start the container and expose the port?
+
+podman run -p=127.0.0.1:20001:20001/udp <image name>
+seems like this binds to the port on podman machine, need another step to bridge through WSL to host
+
+netsh interface portproxy add v4tov4 listenport=<yourPortToForward> listenaddress=0.0.0.0 connectport=<yourPortToConnectToInWSL> connectaddress=(wsl hostname -I)
+netsh interface portproxy add v4tov4 listenport=20001 listenaddress=0.0.0.0 connectport=20001 connectaddress=172.31.87.77
+
+
+
+
+
+So this is where im at, start the SENDER like this:
+	podman run --net=host <image name>
+This creates the container using the same network stack as the podman machine
+Then you can see the udp messages coming through the podman virtual machine (run this command on podman machine):
+	wsl -d podman-machine-default
+	python udp-receiver.py
+The udp-send container uses the network interfaces (ip addresses) of the podman machine
+so maybe try using the interface of a different 
+
+
+
+podman machine:
+172.31.87.77/20
+
+windows wsl:
+172.31.80.1/20
+
+
+
+Listen on ipv4:             Connect to ipv4:
+
+Address         Port        Address         Port
+--------------- ----------  --------------- ----------
+0.0.0.0         20001       172.31.87.77    20001
+
+
+
+
+====================
+
+
+THIS WORKED:
+
+On Windows Host machine, either turn off windows defender firewall, or make sure firewall rules allow UDP messages to get through:
+	Start Menu -> Windows Defender Firewall With Advanced Security -> Inbound Rules
+
+start the sender container:
+	podman run --net=host udp-sender
+
+listen for packets on host machine:
+	python udp-receiver-local.py
+	
+
+===================
+
+Now lets see if we can forward localhost traffic on the podman machine to the WSL windows adapter
+
+
+
+
+
+
+add this line to /etc/sysctl.conf to enable port forwarding
+	net.ipv4.ip_forward = 1
+
+
+# temporary set the ip forwarding to true
+sudo sysctl -w net.ipv4.ip_forward=1
+
+# PREROUTING command modifies the packet before any routing takes place
+# This command receives UDP packets on port 20001, and changes the destination to 172.31.80.1:20001
+sudo iptables -t nat -A PREROUTING -p udp --dport 20001 -j DNAT --to-destination 172.31.80.1:20001
+
+# Creates a FORWARD rule that allows the packets to be routed through the iptables firewall
+sudo iptables -A FORWARD -p udp -d 172.31.80.1 --dport 20001 -j ACCEPT
+
+
+
+
+
+
+
+172.31.80.1:20001:20001/udp
